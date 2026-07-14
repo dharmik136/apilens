@@ -36,11 +36,11 @@ procs:
   api:
     # Django control plane (core API). Waits briefly so Postgres is accepting
     # connections before the first request. Loads apps/api/.env via dotenv.
-    shell: "sleep 4 && cd apps/api && .venv/bin/python manage.py runserver 0.0.0.0:8000"
+    shell: "sleep 4 && cd apps/api && uv run python manage.py runserver 0.0.0.0:8000"
   ingest:
     # Standalone FastAPI ingestion service on :8001. --env-file loads the
     # datastore + introspection settings from apps/ingest/.env.
-    shell: "sleep 5 && cd apps/ingest && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8001 --env-file .env"
+    shell: "sleep 5 && cd apps/ingest && uv run uvicorn app.main:app --host 0.0.0.0 --port 8001 --env-file .env"
   web:
     # Next.js dashboard on :3002.
     shell: "pnpm --filter frontend dev"

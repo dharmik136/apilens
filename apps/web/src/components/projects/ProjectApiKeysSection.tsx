@@ -32,6 +32,7 @@ interface ProjectApiKeysSectionProps {
 export default function ProjectApiKeysSection({ projectSlug, showToast }: ProjectApiKeysSectionProps) {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
@@ -46,12 +47,17 @@ export default function ProjectApiKeysSection({ projectSlug, showToast }: Projec
 
   const fetchKeys = useCallback(async () => {
     try {
+      setIsLoading(true);
+      setFetchError(null);
       const res = await fetch(`/api/projects/${projectSlug}/api-keys`);
       if (!res.ok) throw new Error("Failed to fetch API keys");
       const data = await res.json();
       setKeys(data.keys);
     } catch (err) {
-      if (!(err instanceof DOMException)) console.error(err);
+      if (!(err instanceof DOMException)) {
+        console.error(err);
+        setFetchError(err instanceof Error ? err.message : "Failed to load API keys");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -281,6 +287,20 @@ export default function ProjectApiKeysSection({ projectSlug, showToast }: Projec
           <div className="sessions-loading">
             <Loader2 size={18} className="animate-spin" />
             <span>Loading API keys...</span>
+          </div>
+        ) : fetchError ? (
+          <div className="apikeys-empty" style={{ borderColor: 'var(--color-danger)', backgroundColor: 'var(--color-danger-muted)' }}>
+            <div className="apikeys-empty-icon" style={{ color: 'var(--color-danger)' }}>
+              <AlertTriangle size={20} />
+            </div>
+            <p className="apikeys-empty-text">{fetchError}</p>
+            <button
+              className="settings-btn settings-btn-secondary settings-btn-sm"
+              onClick={fetchKeys}
+              style={{ marginTop: '12px' }}
+            >
+              Retry
+            </button>
           </div>
         ) : keys.length === 0 && !hasInlineContent ? (
           <div className="apikeys-empty">

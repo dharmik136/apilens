@@ -317,23 +317,31 @@ step_js_deps() {
 
 # ── Step 2: Python venv ──────────────────────────────────────────────────────
 step_python_venv() {
-  step_start "Python venv" "Creates apps/api/.venv and installs Django + dependencies via uv."
+  step_start "Python venvs" "Creates .venv and installs dependencies for api and ingest apps via uv."
 
-  if [[ -d apps/api/.venv ]]; then
-    if ! ask ".venv already exists — recreate?" "n"; then
+  if [[ -d apps/api/.venv || -d apps/ingest/.venv ]]; then
+    if ! ask "A .venv already exists — recreate?" "n"; then
       step_skip_reused "Reused existing .venv"
       STEP_VENV_OK=true; return
     fi
-    note "Removing existing .venv…"
-    rm -rf apps/api/.venv
+    note "Removing existing .venvs…"
+    rm -rf apps/api/.venv apps/ingest/.venv
   fi
 
   local rc=0
   (
     cd apps/api
-    run_spin "Creating .venv" uv venv .venv                   || exit 1
-    run_live "Installing Python packages" uv pip install -e . || exit 1
+    run_spin "Creating api .venv" uv venv .venv                   || exit 1
+    run_live "Installing api packages" uv pip install -e . || exit 1
   ) || rc=$?
+
+  if [[ $rc -eq 0 ]]; then
+    (
+      cd apps/ingest
+      run_spin "Creating ingest .venv" uv venv .venv                || exit 1
+      run_live "Installing ingest packages" uv pip install -e . || exit 1
+    ) || rc=$?
+  fi
 
   if [[ $rc -ne 0 ]]; then
     step_advise "Verify Python 3.13: python3 --version" \

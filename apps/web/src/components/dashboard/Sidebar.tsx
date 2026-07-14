@@ -127,6 +127,9 @@ export default function Sidebar() {
           className="app-switcher-trigger"
           onClick={() => setDropdownOpen((prev) => !prev)}
           title={collapsed ? displayName : undefined}
+          aria-haspopup="true"
+          aria-expanded={dropdownOpen}
+          aria-controls="app-switcher-dropdown"
         >
           <span className="app-switcher-avatar">
             {currentAvatar}
@@ -140,7 +143,7 @@ export default function Sidebar() {
         </button>
 
         {dropdownOpen && (
-          <div className="app-switcher-dropdown">
+          <div id="app-switcher-dropdown" className="app-switcher-dropdown">
             <div className="app-switcher-section-label">Projects</div>
             <div className="app-switcher-list">
               {projects.map((project) => {
@@ -232,6 +235,8 @@ export default function Sidebar() {
             className="sidebar-action-btn"
             onClick={toggleSidebar}
             title={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            aria-label={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            aria-expanded={!collapsed}
           >
             {collapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
             {!collapsed && <span>Collapse</span>}
