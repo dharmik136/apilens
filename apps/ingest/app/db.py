@@ -9,7 +9,6 @@ from __future__ import annotations
 import contextlib
 import threading
 
-import psycopg2
 from psycopg2.pool import ThreadedConnectionPool
 from clickhouse_driver import Client
 

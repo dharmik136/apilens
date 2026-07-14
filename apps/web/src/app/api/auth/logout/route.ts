@@ -6,7 +6,7 @@ import { getSession } from "@/lib/session";
 // it falls back to the core API's /auth path so local dev is unchanged.
 const AUTH_API_URL =
   process.env.AUTH_API_URL ||
-  `${process.env.DJANGO_API_URL || "http://localhost:8000/api/v1"}/auth`;
+  getAuthApiUrl();
 const COOKIE_NAME = "apilens_session";
 
 export async function POST() {

@@ -23,7 +23,6 @@ from .schemas import (
     PasskeyAuthenticationOptionsRequest,
     PasskeyAuthenticationVerifyRequest,
     PasskeyCredentialResponse,
-    PasskeyDeleteRequest,
     IdentifyRequest,
     IdentifyResponse,
     TwoFactorEnableResponse,

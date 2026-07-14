@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 // it falls back to the core API's /auth path so local dev is unchanged.
 const AUTH_API_URL =
   process.env.AUTH_API_URL ||
-  `${process.env.DJANGO_API_URL || "http://localhost:8000/api/v1"}/auth`;
+  getAuthApiUrl();
 
 export async function GET(request: NextRequest) {
   try {

@@ -6,12 +6,12 @@ import { setSession } from "@/lib/session";
 // it falls back to the core API's /auth path so local dev is unchanged.
 const AUTH_API_URL =
   process.env.AUTH_API_URL ||
-  `${process.env.DJANGO_API_URL || "http://localhost:8000/api/v1"}/auth`;
+  getAuthApiUrl();
 
 // Core API base — the user lookup (/users/me) stays on the control-plane API,
 // not the identity service.
 const DJANGO_API_URL =
-  process.env.DJANGO_API_URL || "http://localhost:8000/api/v1";
+  getAuthApiUrl().replace("/auth", "");
 
 export async function POST(request: NextRequest) {
   try {

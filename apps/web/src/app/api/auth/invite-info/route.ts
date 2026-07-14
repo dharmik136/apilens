@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 // Identity (IAM) service base — same resolution as the other public auth proxies.
 const AUTH_API_URL =
   process.env.AUTH_API_URL ||
-  `${process.env.DJANGO_API_URL || "http://localhost:8000/api/v1"}/auth`;
+  getAuthApiUrl();
 
 export async function POST(request: NextRequest) {
   try {

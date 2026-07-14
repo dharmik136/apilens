@@ -8,7 +8,7 @@ Usage:
     python manage.py backfill_clickhouse_project_ids [--dry-run] [--batch-size 1000]
 """
 
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 
 from apps.projects.models import App
 from core.database.clickhouse.client import get_clickhouse_client

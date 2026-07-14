@@ -8,7 +8,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.db import IntegrityError, transaction
 from django.db.models import Q
-from django.utils import timezone
 from django.utils.text import slugify
 
 from core.exceptions.base import (
@@ -24,7 +23,6 @@ from .validators import (
     validate_project_slug,
     validate_app_slug,
     RESERVED_PROJECT_SLUGS,
-    RESERVED_APP_SLUGS,
 )
 
 logger = logging.getLogger(__name__)
@@ -1291,7 +1289,6 @@ class ConsumerStatsService:
         until: str | None = None,
         limit: int = 100,
     ) -> list[dict]:
-        from core.database.clickhouse.client import get_clickhouse_client
 
         if not consumer or not consumer.strip():
             return []

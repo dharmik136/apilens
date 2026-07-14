@@ -8,8 +8,9 @@ const DJANGO_API_URL = process.env.DJANGO_API_URL || "http://localhost:8000/api/
 // http://identity:8000/v1); when unset it falls back to the core API's /auth
 // path so local dev is unchanged. (Authenticated settings calls — 2FA, etc. —
 // keep flowing through fetchDjango / the back-compat alias.)
-const AUTH_API_URL =
+export const getAuthApiUrl = () =>
   process.env.AUTH_API_URL || `${DJANGO_API_URL}/auth`;
+const AUTH_API_URL = getAuthApiUrl();
 
 export interface ApiResponse<T> {
   data?: T;
