@@ -28,6 +28,8 @@ export function AppProvider({
 
   useEffect(() => {
     let cancelled = false;
+    setApp(null);
+    setIsLoading(true);
     async function load() {
       try {
         const res = await fetch(`/api/projects/${projectSlug}/apps/${appSlug}`);

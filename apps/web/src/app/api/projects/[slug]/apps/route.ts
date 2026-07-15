@@ -28,6 +28,7 @@ export const POST = (
       name,
       description: body.description || "",
       framework: body.framework || "fastapi",
+      slug: body.slug || "",
     });
 
     return apiResult(result);
