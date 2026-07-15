@@ -93,10 +93,14 @@ class IntrospectConfig:
 
 def load_introspect() -> IntrospectConfig:
     # Defaults target the identity container on the internal docker network.
+    # Path is /v1/introspect per config/urls_identity.py — the identity
+    # service's ROOT_URLCONF mounts its API at /v1/*, not /api/v1/auth/*
+    # (that legacy path only exists behind the Caddy rewrite in front of the
+    # public api.apilens.ai host, which isn't reachable container-to-container).
     return IntrospectConfig(
         url=_first(
             "APILENS_INTROSPECT_URL",
-            default="http://identity:8000/api/v1/auth/introspect",
+            default="http://identity:8000/v1/introspect",
         ),
         secret=_first("INTERNAL_INTROSPECT_SECRET", default=""),
     )

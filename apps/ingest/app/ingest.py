@@ -1,21 +1,25 @@
 """Ingest core — a faithful port of apps/api IngestService for the standalone
 service. Resolves apps, auto-discovers endpoints in Postgres, and writes to the
-same ClickHouse tables (api_requests / api_logs).
+same ClickHouse tables (api_requests / api_logs / api_spans).
 
-Kept deliberately in lock-step with:
-  apps/api/apps/projects/services.py  (IngestService)
-  apps/api/routers/ingest/router.py   (validate_project_slug / resolve_app_identifiers)
+Kept deliberately in lock-step with apps/api/apps/projects/services.py's
+IngestService, the Django-side equivalent — validate_project_slug and
+resolve_app_identifiers below mirror logic that lives inline in that class's
+ingest methods, not a separate router module.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import uuid
 from collections import defaultdict
 
 from .config import MAX_BATCH_SIZE
 from .db import clickhouse, pg_conn
+
+logger = logging.getLogger("apilens.ingest")
 
 ALLOWED_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 
@@ -179,8 +183,16 @@ def ensure_clickhouse_schema(client) -> None:
             "ALTER TABLE api_spans ADD INDEX IF NOT EXISTS idx_api_spans_project_id project_id TYPE bloom_filter(0.01) GRANULARITY 1",
             "ALTER TABLE api_spans ADD INDEX IF NOT EXISTS idx_api_spans_environment environment TYPE bloom_filter(0.01) GRANULARITY 1",
         ]
+        # Each statement is independent — one failing ALTER (e.g. a future
+        # typo or a version-incompatible column type) must not block schema
+        # readiness for the other tables, or every ingest endpoint (requests,
+        # logs, traces) 500s until someone diagnoses and fixes that one
+        # statement, even though only one table was actually affected.
         for s in stmts:
-            client.execute(s)
+            try:
+                client.execute(s)
+            except Exception as exc:
+                logger.warning("ensure_clickhouse_schema: statement failed, continuing: %s", exc)
         _schema_ready = True
 
 
