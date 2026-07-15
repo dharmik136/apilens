@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { fetchWithRefresh } from "@/lib/proxy";
+import { getAuthApiUrl } from "@/lib/api-client";
 
 // Auth/identity calls go to the identity service (AUTH_API_URL); default
 // falls back to the core API's /auth path so local dev is unchanged.

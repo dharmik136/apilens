@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { setSession } from "@/lib/session";
+import { getAuthApiUrl } from "@/lib/api-client";
 
 // Identity (IAM) service base. In production AUTH_API_URL points at the
 // dedicated identity service (internal http://identity:8000/v1); when unset

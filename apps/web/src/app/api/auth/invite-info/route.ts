@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAuthApiUrl } from "@/lib/api-client";
 
 // Identity (IAM) service base — same resolution as the other public auth proxies.
 const AUTH_API_URL =
