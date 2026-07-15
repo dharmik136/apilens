@@ -13,7 +13,12 @@ import type {
   Logger,
 } from "./types.js";
 
-const SDK_VERSION = "0.1.0";
+// Injected at build time by tsup.config.ts's `define`, sourced from
+// package.json so the two can't drift. Falls back for unbuilt contexts
+// (e.g. vitest running directly against src/*.ts).
+declare const __APILENS_SDK_VERSION__: string | undefined;
+const SDK_VERSION =
+  typeof __APILENS_SDK_VERSION__ !== "undefined" ? __APILENS_SDK_VERSION__ : "0.0.0-dev";
 
 type RequiredConfig = {
   apiKey: string;

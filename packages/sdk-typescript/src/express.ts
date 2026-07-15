@@ -109,7 +109,6 @@ function createApiLensMiddleware(config: ApiLensExpressConfig = {}): MiddlewareW
 
     const startedAt = performance.now();
     const method = String(req.method || "GET").toUpperCase();
-    const path = normalizePath(req.route?.path || req.path || req.originalUrl || "/");
     const requestSize = toNonNegativeInt(
       req.get?.("content-length") || req.headers["content-length"],
       0,
@@ -186,6 +185,11 @@ function createApiLensMiddleware(config: ApiLensExpressConfig = {}): MiddlewareW
 
     res.once("finish", () => {
       try {
+        // req.route is only populated once Express's router has matched and
+        // dispatched to a handler, which happens inside next() — it's always
+        // undefined if read before next() is called (i.e. at the top of this
+        // middleware), so the template lookup must happen here instead.
+        const path = normalizePath(req.route?.path || req.path || req.originalUrl || "/");
         const responseTimeMs = Math.max(performance.now() - startedAt, 0);
         const consumer =
           consumerFromStringOrObject(req.apilensConsumer) ||
