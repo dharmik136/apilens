@@ -25,10 +25,7 @@ classifiers = [
   "Topic :: Software Development :: Libraries",
   "Topic :: System :: Monitoring",
 ]
-dependencies = [
-  "opentelemetry-api>=1.25.0",
-  "opentelemetry-sdk>=1.25.0",
-]
+dependencies = []
 
 [project.optional-dependencies]
 fastapi = [
@@ -49,6 +46,14 @@ litestar = [
 blacksheep = [
   "blacksheep>=2.0.0",
 ]
+# Only needed for install_apilens_exporter() (apilens/client/otel.py), which
+# is lazily imported so the core middleware works without OTel installed at
+# all — these were previously unconditional base dependencies, contradicting
+# that design.
+otel = [
+  "opentelemetry-api>=1.25.0",
+  "opentelemetry-sdk>=1.25.0",
+]
 all = [
   "fastapi>=0.110.0",
   "starlette>=0.36.0",
@@ -56,6 +61,8 @@ all = [
   "flask>=3.0.0",
   "litestar>=2.0.0",
   "blacksheep>=2.0.0",
+  "opentelemetry-api>=1.25.0",
+  "opentelemetry-sdk>=1.25.0",
 ]
 
 [project.urls]

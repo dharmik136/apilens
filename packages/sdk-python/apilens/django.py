@@ -16,7 +16,7 @@ from .client.middleware import (
     set_consumer,
     track_consumer,
 )
-from .client.spans import configure_spans, env_spans_enabled, record_span
+from .client.spans import configure_spans, env_spans_enabled, record_span, use_recorder
 from .client.trace import begin_request_trace, end_request_trace
 
 _client_singleton: ApiLensClient | None = None
@@ -126,6 +126,7 @@ class ApiLensDjangoMiddleware:
             raise RuntimeError("APILENS_APP_ID is required in Django settings")
         self.max_payload_bytes = int(getattr(settings, "APILENS_MAX_PAYLOAD_BYTES", 65536))
         self.capture_headers = bool(getattr(settings, "APILENS_CAPTURE_HEADERS", True))
+        self.capture_payloads = bool(getattr(settings, "APILENS_CAPTURE_PAYLOADS", True))
         # Heuristic path parametrization when the URL resolver gives no route
         # (env APILENS_PARAMETRIZE_PATHS wins over this setting).
         self.parametrize_paths = bool(getattr(settings, "APILENS_PARAMETRIZE_PATHS", True))
@@ -134,8 +135,9 @@ class ApiLensDjangoMiddleware:
         self.get_consumer = _resolve_get_consumer(settings)
         # APILENS_CAPTURE_SPANS also works as an env kill-switch (env wins over the setting).
         self.capture_spans = bool(getattr(settings, "APILENS_CAPTURE_SPANS", True)) and env_spans_enabled()
+        self._span_recorder = None
         if self.capture_spans:
-            configure_spans(
+            self._span_recorder = configure_spans(
                 self.client,
                 app_id=self.app_id,
                 environment=getattr(settings, "APILENS_ENVIRONMENT", None),
@@ -152,6 +154,10 @@ class ApiLensDjangoMiddleware:
         return None
 
     def __call__(self, request):
+        with use_recorder(self._span_recorder):
+            return self._handle_request(request)
+
+    def _handle_request(self, request):
         started_at = time.perf_counter()
         response = None
         status_code = 500
@@ -190,7 +196,7 @@ class ApiLensDjangoMiddleware:
             except Exception:
                 ctx.request_headers = ""
         try:
-            body = request.body[: self.max_payload_bytes]
+            body = request.body[: self.max_payload_bytes] if self.capture_payloads else b""
             ctx.request_payload = decode_utf8_safe(body)
         except Exception:
             ctx.request_payload = ""
@@ -201,7 +207,9 @@ class ApiLensDjangoMiddleware:
             status_code = int(getattr(response, "status_code", 500) or 500)
             content = getattr(response, "content", b"") or b""
             response_size = len(content)
-            response_payload = decode_utf8_safe(content[: self.max_payload_bytes])
+            response_payload = decode_utf8_safe(
+                content[: self.max_payload_bytes] if self.capture_payloads else b""
+            )
             if self.capture_headers:
                 try:
                     response_headers = serialize_headers(dict(response.items()))

@@ -20,7 +20,7 @@ from ._capture import (
 from ._routes import resolve_endpoint_path
 from ._sanitize import decode_utf8_safe, serialize_headers
 from .client import ApiLensClient
-from .spans import configure_spans, env_spans_enabled, record_error_log, record_span
+from .spans import configure_spans, env_spans_enabled, record_error_log, record_span, use_recorder
 from .trace import begin_request_trace, end_request_trace
 
 
@@ -314,8 +314,9 @@ class ApiLensASGIMiddleware:
         # Spans need an app_id to be ingestible; skip configuration without one.
         # APILENS_CAPTURE_SPANS=false is a global kill-switch (env wins over code).
         self.capture_spans = capture_spans and bool(app_id) and env_spans_enabled()
+        self._span_recorder = None
         if self.capture_spans:
-            configure_spans(
+            self._span_recorder = configure_spans(
                 client,
                 app_id=app_id,
                 environment=environment,
@@ -326,6 +327,10 @@ class ApiLensASGIMiddleware:
         if scope.get("type") != "http":
             await self.app(scope, receive, send)
             return
+        with use_recorder(self._span_recorder):
+            await self._handle_http(scope, receive, send)
+
+    async def _handle_http(self, scope, receive, send) -> None:
 
         headers = _headers_to_dict(scope.get("headers", []))
         path = _normalize_path(scope.get("path", "/"))
@@ -508,8 +513,9 @@ class ApiLensWSGIMiddleware:
         # Spans need an app_id to be ingestible; skip configuration without one.
         # APILENS_CAPTURE_SPANS=false is a global kill-switch (env wins over code).
         self.capture_spans = capture_spans and bool(app_id) and env_spans_enabled()
+        self._span_recorder = None
         if self.capture_spans:
-            configure_spans(
+            self._span_recorder = configure_spans(
                 client,
                 app_id=app_id,
                 environment=environment,
@@ -517,6 +523,18 @@ class ApiLensWSGIMiddleware:
             )
 
     def __call__(self, environ: dict[str, Any], start_response: Callable) -> Any:
+        return self._handle_wsgi(environ, start_response)
+
+    def _handle_wsgi(self, environ: dict[str, Any], start_response: Callable) -> Any:
+        # _handle_wsgi is a generator (it yields response chunks below), so the
+        # recorder must be checked in here, wrapping the yields — checking it
+        # in around just the call to this method would only cover generator
+        # creation, not the iteration where record_span/record_error_log
+        # actually run.
+        with use_recorder(self._span_recorder):
+            yield from self._handle_wsgi_body(environ, start_response)
+
+    def _handle_wsgi_body(self, environ: dict[str, Any], start_response: Callable) -> Any:
         started_at = time.perf_counter()
         consumer_token = _consumer_ctx.set(None)
         trace_id, span_id, parent_span_id, trace_token = begin_request_trace(environ.get("HTTP_TRACEPARENT"))

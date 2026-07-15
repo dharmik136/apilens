@@ -11,7 +11,13 @@ from .litestar import ApiLensPlugin
 
 def install_apilens_exporter(*args, **kwargs):
     # Lazy import keeps core middleware usable without OTel dependency.
-    from .client.otel import install_apilens_exporter as _install_apilens_exporter
+    try:
+        from .client.otel import install_apilens_exporter as _install_apilens_exporter
+    except ImportError as exc:
+        raise ImportError(
+            "install_apilens_exporter() requires the optional OpenTelemetry "
+            "dependencies. Install them with: pip install 'apilenss[otel]'"
+        ) from exc
 
     return _install_apilens_exporter(*args, **kwargs)
 

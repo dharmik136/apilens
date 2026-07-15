@@ -14,11 +14,13 @@ the only thing written to ``/v1/logs``; it is not a general logging API.
 
 from __future__ import annotations
 
+import contextvars
 import os
 import threading
 import time
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Iterator
 
 from .models import LogRecord, SpanRecord
 from .trace import current_span_id, current_trace_id, generate_span_id
@@ -57,8 +59,16 @@ class _SpanRecorder:
         self.service_name = service_name
 
 
-_recorder: _SpanRecorder | None = None
-_recorder_lock = threading.Lock()
+# Request-scoped, not process-scoped: a bare module global would let one
+# middleware instance's configure_spans() overwrite another's for every
+# in-flight request, cross-contaminating attribution whenever more than one
+# app is instrumented in the same process. Each middleware instance builds
+# its own recorder once (at construction) and checks it into this contextvar
+# only for the duration of the request it is currently handling, via
+# use_recorder() below.
+_recorder_var: contextvars.ContextVar["_SpanRecorder | None"] = contextvars.ContextVar(
+    "apilens_span_recorder", default=None
+)
 
 
 def configure_spans(
@@ -68,18 +78,32 @@ def configure_spans(
     environment: str | None = None,
     service_name: str = "",
     instrument_http: bool = True,
-) -> None:
-    """Register the destination for spans (called by the middlewares)."""
-    global _recorder
-    with _recorder_lock:
-        _recorder = _SpanRecorder(
-            client,
-            app_id=app_id,
-            environment=environment or client.config.environment,
-            service_name=service_name,
-        )
+) -> "_SpanRecorder":
+    """Build a recorder for one middleware instance and ensure outbound HTTP
+    instrumentation is installed process-wide. Does NOT activate the recorder
+    — the caller must check it in per-request via use_recorder()."""
+    recorder = _SpanRecorder(
+        client,
+        app_id=app_id,
+        environment=environment or client.config.environment,
+        service_name=service_name,
+    )
     if instrument_http:
         instrument_outbound_http()
+    return recorder
+
+
+@contextmanager
+def use_recorder(recorder: "_SpanRecorder | None") -> Iterator[None]:
+    """Activate `recorder` as the span/error-log destination for the
+    duration of the current request. Scoped via contextvars so concurrent
+    requests handled by different middleware instances in the same process
+    (or interleaved async tasks) never see each other's recorder."""
+    token = _recorder_var.set(recorder)
+    try:
+        yield
+    finally:
+        _recorder_var.reset(token)
 
 
 def _clean_attributes(attributes: dict[str, Any] | None) -> dict[str, str]:
@@ -110,7 +134,7 @@ def record_span(
     end_time: datetime | None = None,
 ) -> None:
     """Queue one finished span (no-op when spans are not configured)."""
-    recorder = _recorder
+    recorder = _recorder_var.get()
     if recorder is None or not trace_id or not span_id:
         return
     ended = end_time or datetime.now(tz=timezone.utc)
@@ -152,7 +176,7 @@ def record_error_log(
     Called by the middlewares when a request raises or returns 5xx, so the
     failing request's trace carries its message. Not a public logging API.
     """
-    recorder = _recorder
+    recorder = _recorder_var.get()
     if recorder is None or not trace_id:
         return
     consumer = consumer or {}
@@ -258,7 +282,7 @@ def _patch_requests() -> None:
     def send(self, request, **kwargs):
         trace_id = current_trace_id()
         url = _strip_url(request.url or "")
-        if not trace_id or _recorder is None or _skips_own_ingest(url):
+        if not trace_id or _recorder_var.get() is None or _skips_own_ingest(url):
             return original(self, request, **kwargs)
 
         parent = current_span_id()
@@ -294,7 +318,7 @@ def _patch_httpx() -> None:
     def send(self, request, **kwargs):
         trace_id = current_trace_id()
         url = _strip_url(str(request.url))
-        if not trace_id or _recorder is None or _skips_own_ingest(url):
+        if not trace_id or _recorder_var.get() is None or _skips_own_ingest(url):
             return original_sync(self, request, **kwargs)
 
         parent = current_span_id()
@@ -323,7 +347,7 @@ def _patch_httpx() -> None:
     async def send_async(self, request, **kwargs):
         trace_id = current_trace_id()
         url = _strip_url(str(request.url))
-        if not trace_id or _recorder is None or _skips_own_ingest(url):
+        if not trace_id or _recorder_var.get() is None or _skips_own_ingest(url):
             return await original_async(self, request, **kwargs)
 
         parent = current_span_id()

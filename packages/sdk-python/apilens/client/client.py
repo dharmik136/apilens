@@ -18,6 +18,12 @@ from .models import LogRecord, RequestRecord, SpanRecord
 logger = logging.getLogger("apilens")
 
 
+class _NonRetryableIngestError(RuntimeError):
+    """A 4xx (other than 429) response — retrying identical bytes cannot
+    succeed, so _send_batch_with_retry gives up immediately instead of
+    burning the retry budget (and blocking the flush thread) on it."""
+
+
 @dataclass(slots=True)
 class ApiLensConfig:
     api_key: str
@@ -269,6 +275,12 @@ class ApiLensClient:
             try:
                 send(batch)
                 return True
+            except _NonRetryableIngestError as exc:
+                # A 4xx (other than 429): identical bytes will fail identically
+                # every time, so retrying just burns the retry budget and
+                # delays whatever batch is queued behind this one.
+                last_error = exc
+                break
             except Exception as exc:  # pragma: no cover
                 last_error = exc
                 if attempt >= self.config.max_retries:
@@ -326,7 +338,7 @@ class ApiLensClient:
                     raise RuntimeError(f"API Lens ingest returned status={status}")
         except urllib.error.HTTPError as exc:
             if 400 <= exc.code < 500 and exc.code != 429:
-                raise RuntimeError(f"Non-retryable ingest error status={exc.code}") from exc
+                raise _NonRetryableIngestError(f"Non-retryable ingest error status={exc.code}") from exc
             raise RuntimeError(f"Retryable ingest error status={exc.code}") from exc
         except urllib.error.URLError as exc:
             raise RuntimeError(f"Ingest network error: {exc}") from exc

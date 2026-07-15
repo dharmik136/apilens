@@ -28,8 +28,13 @@ class ApiLensPlugin:
     app_id: str = ""
     project_slug: str = ""
     environment: str | None = None
+    log_request_body: bool = True
+    log_response_body: bool = True
+    capture_payloads: bool = True
+    capture_headers: bool = True
     capture_spans: bool = True
     service_name: str = ""
+    max_payload_bytes: int = 65536
 
     def on_app_init(self, app_config):
         try:
@@ -47,8 +52,13 @@ class ApiLensPlugin:
                 app_id=self.app_id,
                 project_slug=self.project_slug,
                 environment=self.environment,
+                log_request_body=self.log_request_body,
+                log_response_body=self.log_response_body,
+                capture_payloads=self.capture_payloads,
+                capture_headers=self.capture_headers,
                 capture_spans=self.capture_spans,
                 service_name=self.service_name,
+                max_payload_bytes=self.max_payload_bytes,
                 route_resolver=litestar_route_template,
             )
         )
@@ -63,8 +73,13 @@ def instrument_app(
     app_id: str = "",
     project_slug: str = "",
     environment: str | None = None,
+    log_request_body: bool = True,
+    log_response_body: bool = True,
+    capture_payloads: bool = True,
+    capture_headers: bool = True,
     capture_spans: bool = True,
     service_name: str = "",
+    max_payload_bytes: int = 65536,
 ):
     """Fallback direct installation for Litestar ASGI apps."""
     app.asgi_handler = ApiLensASGIMiddleware(
@@ -73,8 +88,13 @@ def instrument_app(
         app_id=app_id,
         project_slug=project_slug,
         environment=environment,
+        log_request_body=log_request_body,
+        log_response_body=log_response_body,
+        capture_payloads=capture_payloads,
+        capture_headers=capture_headers,
         capture_spans=capture_spans,
         service_name=service_name,
+        max_payload_bytes=max_payload_bytes,
         route_resolver=litestar_route_template,
     )
     return app

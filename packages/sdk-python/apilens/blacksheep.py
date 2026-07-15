@@ -36,8 +36,13 @@ def instrument_app(
     app_id: str = "",
     project_slug: str = "",
     environment: str | None = None,
+    log_request_body: bool = True,
+    log_response_body: bool = True,
+    capture_payloads: bool = True,
+    capture_headers: bool = True,
     capture_spans: bool = True,
     service_name: str = "",
+    max_payload_bytes: int = 65536,
 ):
     """BlackSheep integration via ASGI middleware.
 
@@ -51,8 +56,13 @@ def instrument_app(
         app_id=app_id,
         project_slug=project_slug,
         environment=environment,
+        log_request_body=log_request_body,
+        log_response_body=log_response_body,
+        capture_payloads=capture_payloads,
+        capture_headers=capture_headers,
         capture_spans=capture_spans,
         service_name=service_name,
+        max_payload_bytes=max_payload_bytes,
         route_resolver=blacksheep_route_template,
     )
     if hasattr(app, "asgi"):
