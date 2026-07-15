@@ -183,8 +183,10 @@ class ProjectService:
         AuthorizationError (403) — the project exists, the caller just lacks
         access — distinguishing "no access" (not a member) from "insufficient
         permission" (a member whose role can't do this action). OPA's None (OPA
-        unreachable) falls back to "has any role" so the dashboard degrades
-        rather than 500s. Returns the resolved role.
+        unreachable) fails open only for read actions, so the dashboard can
+        still render, but fails closed for write/admin/delete — an unreachable
+        policy engine must never grant a privileged action it never evaluated.
+        Returns the resolved role.
         """
         role = ProjectService.get_role(user, project)
 
@@ -211,8 +213,15 @@ class ProjectService:
         # A member, but their role isn't permitted to perform this action.
         if decision is False:
             raise AuthorizationError("You don't have permission to perform this action")
-        # OPA unavailable but the user has a role: degrade gracefully (allow).
-        return role
+        # OPA unavailable (decision is None). Fail open only for reads, so the
+        # dashboard degrades rather than 500s; fail closed for anything
+        # privileged so a policy-engine outage can never grant write/admin/
+        # delete to a role that hasn't been evaluated against it.
+        if action == "read":
+            return role
+        raise AuthorizationError(
+            "Unable to verify permissions right now — the authorization service is unreachable"
+        )
 
     @staticmethod
     def get_project_by_slug(user, slug: str, action: str = "read") -> Project:
@@ -705,15 +714,6 @@ class IngestService:
             IngestService._trace_columns_ready = True
 
     @staticmethod
-    def _safe_payload(value: str) -> str:
-        if not value:
-            return ""
-        text = str(value)
-        if len(text) <= IngestService.MAX_PAYLOAD_CHARS:
-            return text
-        return text[: IngestService.MAX_PAYLOAD_CHARS]
-
-    @staticmethod
     def ensure_api_logs_table(client) -> None:
         if IngestService._api_logs_table_ready:
             return
@@ -726,6 +726,7 @@ class IngestService:
                     CREATE TABLE IF NOT EXISTS api_logs (
                         timestamp DateTime64(3) CODEC(DoubleDelta, ZSTD(1)),
                         app_id String CODEC(ZSTD(1)),
+                        project_id String CODEC(ZSTD(1)),
                         environment LowCardinality(String) CODEC(ZSTD(1)),
                         level LowCardinality(String) CODEC(ZSTD(1)),
                         message String CODEC(ZSTD(3)),
@@ -754,6 +755,7 @@ class IngestService:
                 # Correlation columns from migration 004; the legacy runtime
                 # CREATE above lacks them, so ensure before selecting them.
                 for stmt in (
+                    "ALTER TABLE api_logs ADD COLUMN IF NOT EXISTS project_id String CODEC(ZSTD(1))",
                     "ALTER TABLE api_logs ADD COLUMN IF NOT EXISTS endpoint_method LowCardinality(String) CODEC(ZSTD(1))",
                     "ALTER TABLE api_logs ADD COLUMN IF NOT EXISTS endpoint_path String CODEC(ZSTD(1))",
                     "ALTER TABLE api_logs ADD COLUMN IF NOT EXISTS status_code UInt16 CODEC(ZSTD(1))",
@@ -808,6 +810,9 @@ class IngestService:
                 )
                 client.execute(
                     "ALTER TABLE api_spans ADD INDEX IF NOT EXISTS idx_api_spans_project_id project_id TYPE bloom_filter(0.01) GRANULARITY 1"
+                )
+                client.execute(
+                    "ALTER TABLE api_spans ADD INDEX IF NOT EXISTS idx_api_spans_environment environment TYPE bloom_filter(0.01) GRANULARITY 1"
                 )
             except Exception as exc:
                 logger.warning("Unable to ensure api_spans table: %s", exc)

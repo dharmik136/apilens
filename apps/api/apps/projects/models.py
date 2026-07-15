@@ -28,6 +28,7 @@ class Project(models.Model):
     slug = models.SlugField(max_length=120, db_index=True)
     description = models.TextField(blank=True, default="")
     is_active = models.BooleanField(default=True)
+    anomaly_alerts_enabled = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -267,3 +268,86 @@ class ProjectInvitation(models.Model):
 
     def __str__(self):
         return f"invite {self.email} -> {self.project_id} ({self.role}, {self.status})"
+
+
+class AlertEvent(models.Model):
+    """A detected anomaly (error-rate or latency deviation) on one endpoint.
+
+    Written by the (not-yet-implemented) anomaly-scanning job; this model was
+    previously missing even though migrations 0003/0005 already created the
+    `alert_events` table, leaving it with no ORM-reachable read/write path.
+    Field set mirrors those migrations exactly.
+    """
+
+    class Kind(models.TextChoices):
+        ERROR_RATE = "error_rate", "Error rate"
+        LATENCY = "latency", "Latency"
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        DISMISSED = "dismissed", "Dismissed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(
+        "projects.Project", on_delete=models.CASCADE, related_name="alert_events"
+    )
+    app = models.ForeignKey(
+        "projects.App",
+        on_delete=models.CASCADE,
+        related_name="alert_events",
+        null=True,
+        blank=True,
+    )
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    method = models.CharField(max_length=10)
+    path = models.CharField(max_length=500)
+    observed_value = models.FloatField()
+    baseline_value = models.FloatField()
+    threshold_value = models.FloatField()
+    window_start = models.DateTimeField()
+    window_end = models.DateTimeField()
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.ACTIVE, db_index=True
+    )
+    dismissed_at = models.DateTimeField(null=True, blank=True)
+    dismissed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    dedup_key = models.CharField(max_length=560)
+    viewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "alert_events"
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["project", "status", "-created_at"])]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "dedup_key"], name="unique_alert_dedup_per_project"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.kind} alert on {self.method} {self.path} ({self.status})"
+
+
+class JobHeartbeat(models.Model):
+    """Last-run bookkeeping for a named background job (e.g. the anomaly
+    scanner). Previously missing even though migration 0004 already created
+    the `job_heartbeats` table."""
+
+    name = models.CharField(max_length=100, primary_key=True)
+    last_run_at = models.DateTimeField()
+    last_scanned = models.IntegerField(default=0)
+    last_created = models.IntegerField(default=0)
+    last_duration_ms = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = "job_heartbeats"
+
+    def __str__(self):
+        return f"{self.name} @ {self.last_run_at}"
