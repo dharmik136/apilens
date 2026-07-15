@@ -4,6 +4,8 @@ traces (cart → catalog, and cart → order → inventory + payment)."""
 
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from fastapi import Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 
@@ -33,9 +35,13 @@ async def get_cart(x_user_email: str | None = Header(default=None)):
 async def add_item(body: AddItemBody, request: Request, x_user_email: str | None = Header(default=None)):
     if body.quantity <= 0:
         raise HTTPException(status_code=400, detail="quantity must be positive")
+    if len(body.product_id) > 200:
+        raise HTTPException(status_code=400, detail="product_id too long")
 
     # Validate the product exists via catalog-service (cross-service call).
-    resp = await call_service("catalog-service", "GET", f"/products/{body.product_id}", request=request)
+    # product_id is untrusted (may contain control chars, "/", etc.) — encode
+    # it as a single path segment rather than interpolating it raw.
+    resp = await call_service("catalog-service", "GET", f"/products/{quote(body.product_id, safe='')}", request=request)
     if resp.status_code == 404:
         raise HTTPException(status_code=404, detail=f"product {body.product_id} not found")
     if resp.status_code >= 400:

@@ -10,8 +10,6 @@ import random
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-import apilens
-
 from .base import identify_consumer, make_app
 
 app = make_app("payment-service")
@@ -31,11 +29,10 @@ async def charge(body: ChargeBody):
     if body.amount <= 0:
         raise HTTPException(status_code=400, detail="amount must be positive")
 
-    # Simulate talking to an external gateway (shows up as its own span).
-    with apilens.span("gateway.authorize", kind="http", attributes={"amount": body.amount}):
-        await asyncio.sleep(random.uniform(0.02, 0.12))
-        if random.random() < 0.08:  # ~8% slow calls
-            await asyncio.sleep(random.uniform(0.3, 0.9))
+    # Simulate talking to an external gateway.
+    await asyncio.sleep(random.uniform(0.02, 0.12))
+    if random.random() < 0.08:  # ~8% slow calls
+        await asyncio.sleep(random.uniform(0.3, 0.9))
 
     roll = random.random()
     if roll < 0.06:  # ~6% gateway blows up
